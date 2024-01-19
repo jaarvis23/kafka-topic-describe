@@ -8,8 +8,13 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Node;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
@@ -42,7 +47,7 @@ public class KafkaTopicDescribe {
         }
     }
 
-    // Method to format and print the contents of Topic Describe Command
+    // Method to execute the command -> kafka-console-consumer.sh --topic {topicName} --from-beginning
     private static void DescribeTopic(AdminClient adminClient) {
         // Specify the topic to describe
         String topicName = "test-topic";
@@ -79,6 +84,9 @@ public class KafkaTopicDescribe {
             e.printStackTrace();
         }
     }
+
+    //Method to execute the command -> kafka-topics.sh --topic {topicName} --describe
+    
     private static void ListTopics(AdminClient adminClient){
         try {
             Collection<String> topics = adminClient.listTopics().names().get();
@@ -90,24 +98,42 @@ public class KafkaTopicDescribe {
             e.printStackTrace();
         }
     }
+
     // Method to execute the kafka-console-consumer.sh command
     private static void executeConsumer() {
+        // Set Kafka broker address
+        String bootstrapServers = "localhost:9092";
+
+        // Set the consumer group id
+        String groupId = "test";
+
+        // Set the topic to subscribe to
+        String topic = "test-topic";
+
+        // Create consumer properties
+        Properties properties = new Properties();
+        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+        // Create Kafka consumer
+        Consumer<String, String> consumer = new KafkaConsumer<>(properties);
+
+        // Subscribe to the Kafka topic
+        consumer.subscribe(Collections.singletonList(topic));
+
+        // poll(listen) for records and print messages
         try {
-            String command = "/root/kafka-tar/kafka_2.13-3.5.1/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test-topic --from-beginning";
-            Process process = Runtime.getRuntime().exec(command);
-
-            // Read the output of the process
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+            while (true) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+                records.forEach(record -> {
+                    System.out.println("Received message: " + record.value());
+                });
             }
-
-            // Wait for the process to complete
-            int exitCode = process.waitFor();
-            System.out.println("Command exited with code: " + exitCode);
-        } catch (Exception e) {
-            e.printStackTrace();
+        } finally {
+            // Close the consumer
+            consumer.close();
         }
     }
 
